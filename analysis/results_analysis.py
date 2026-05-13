@@ -499,10 +499,16 @@ def build_post_adaptation_envelope(level1_df: pd.DataFrame):
     return envelope_df
 
 
-def build_method_level_metrics(replicate_auc_df: pd.DataFrame, level1_df: pd.DataFrame):
+def build_method_level_metrics(
+    replicate_auc_df: pd.DataFrame,
+    level1_df: pd.DataFrame,
+    distillation_model_names=None,
+):
     both_df = level1_df.loc[level1_df['scenario'] == 'both'].copy()
     if both_df.empty:
         return pd.DataFrame(), pd.DataFrame()
+
+    distillation_model_set = {str(model_name) for model_name in (distillation_model_names or [])}
 
     baseline_df = both_df.loc[
         np.isclose(both_df['train_missing_prop'], 0.0) & np.isclose(both_df['test_missing_prop'], 0.0),
@@ -521,11 +527,20 @@ def build_method_level_metrics(replicate_auc_df: pd.DataFrame, level1_df: pd.Dat
         test_complete_df = model_replicates_df.loc[np.isclose(model_replicates_df['test_missing_prop'], 0.0)].copy()
 
         test_time_resilience = fit_mixedlm_slope(train_complete_df, 'test_missing_prop')
-        intuition = fit_mixedlm_slope(test_complete_df, 'train_missing_prop')
+        exclude_from_intuition = model_name in distillation_model_set
+        if exclude_from_intuition:
+            intuition = {
+                'slope': np.nan,
+                'p_value': np.nan,
+                'fit_status': 'excluded_distillation_requires_complete_training_data',
+            }
+        else:
+            intuition = fit_mixedlm_slope(test_complete_df, 'train_missing_prop')
 
         rows.append({
             'model_name': model_name,
             'baseline_mean_auc': float(baseline_lookup.get(model_name, np.nan)),
+            'excluded_from_intuition_ranking': bool(exclude_from_intuition),
             'intuition_slope': float(intuition['slope']),
             'intuition_p_value': float(intuition['p_value']) if np.isfinite(intuition['p_value']) else np.nan,
             'intuition_fit_status': intuition['fit_status'],
@@ -608,9 +623,10 @@ def build_method_plot_summary(replicate_auc_df: pd.DataFrame, n_bootstrap=2000, 
     return summary_df
 
 
-def build_metric_ordering_table(method_level_metrics_df: pd.DataFrame):
+def build_metric_ordering_table(method_level_metrics_df: pd.DataFrame, distillation_model_names=None):
     if method_level_metrics_df.empty:
         return pd.DataFrame()
+    distillation_model_set = {str(model_name) for model_name in (distillation_model_names or [])}
     metric_specs = [
         ('baseline_mean_auc', 'Mean baseline performance'),
         ('intuition_slope', 'Intuition'),
@@ -620,8 +636,11 @@ def build_metric_ordering_table(method_level_metrics_df: pd.DataFrame):
     max_len = int(method_level_metrics_df['model_name'].nunique())
     out = {}
     for metric_col, label in metric_specs:
+        metric_df = method_level_metrics_df[['model_name', metric_col]].copy()
+        if metric_col == 'intuition_slope' and distillation_model_set:
+            metric_df = metric_df.loc[~metric_df['model_name'].astype(str).isin(distillation_model_set)].copy()
         ordered = (
-            method_level_metrics_df[['model_name', metric_col]]
+            metric_df
             .sort_values([metric_col, 'model_name'], ascending=[False, True], na_position='last')
             ['model_name']
             .tolist()
