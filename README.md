@@ -329,25 +329,25 @@ The missing-modality decay notebook produces four complementary output views. Th
 
 This plot summarizes how each method behaves as one or more modalities are increasingly removed at training/evaluation time. Each curve tracks the mean AUC across missingness levels, making it easy to see which methods degrade smoothly and which ones fail sharply when modality information disappears.
 
-![Mean AUC decay curves](docs/readme_figures/mmdecay_level0_mean_auc_curves.png)
+![Mean AUC decay curves](analysis/assets/readme_figures/mmdecay_level0_mean_auc_curves.png)
 
 #### Output View 2: Level 1 Global Method Comparison
 
 This view aggregates method performance across the full missingness experiment. It provides a high-level comparison of the methods, showing their global robustness profile across the evaluated missing-modality conditions.
 
-![Level 1 global method comparison](docs/readme_figures/mmdecay_level1_global_overview.png)
+![Level 1 global method comparison](analysis/assets/readme_figures/mmdecay_level1_global_overview.png)
 
 #### Output View 3: Level 2 Pairwise Condition Matrices
 
 These matrices compare methods pairwise within each missingness condition. They show where one method outperforms another under specific modality-drop scenarios, which helps separate globally strong methods from methods that are only strong in particular missingness patterns.
 
-![Level 2 pairwise condition matrices](docs/readme_figures/mmdecay_level2_pairwise_condition_matrices.png)
+![Level 2 pairwise condition matrices](analysis/assets/readme_figures/mmdecay_level2_pairwise_condition_matrices.png)
 
 #### Output View 4: Level 3 Significant Pairwise Differences
 
 This final view filters the pairwise comparisons down to statistically significant differences. It highlights which method advantages remain after statistical testing, making it easier to identify robust, non-random performance gaps across the missingness decay experiment.
 
-![Level 3 significant pairwise differences](docs/readme_figures/mmdecay_level3_significant_pairs.png)
+![Level 3 significant pairwise differences](analysis/assets/readme_figures/mmdecay_level3_significant_pairs.png)
 
 ### Fixed Dataset Analysis
 
