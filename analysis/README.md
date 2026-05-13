@@ -50,7 +50,9 @@ Main outputs:
 
 ![MM decay level 3 significant pairs](assets/readme_figures/mmcrc_ablation_level3_significant_pairs.png)
 
-Level 3 collapses the significant pairwise tests into an overview of robust winners and losers. This is useful for checking whether a method wins consistently across missingness conditions or only under a narrow scenario.
+Level 3 collapses the significant pairwise tests into an overview of robust winners and losers. For each missingness condition, methods are first ordered by mean AUC. The plot then finds the first lower-ranked method that the top-ranked method beats significantly after FDR correction. The "top equivalent methods" are the contiguous higher-ranked methods that are all statistically significantly better than that same lower-ranked AUC method. They are called equivalent because the plot treats them as the leading group above the same statistical boundary; it does not claim they are significantly different from each other.
+
+This makes the last graph a compact answer to: which methods form the top statistically supported tier, and which lower-ranked method defines the separation from the rest?
 
 ## Fixed Dataset Analysis
 
@@ -66,7 +68,9 @@ The violin shows the distribution of replicate AUCs per method, and the black po
 
 ![Fixed dataset pairwise matrix](assets/readme_figures/mmcrc_fixed_pairwise_matrix.png)
 
-The fixed pairwise matrix compares methods using paired Wilcoxon tests over shared replicate IDs. The row method is the winner and the column method is the loser. Colored cells indicate significant positive mean AUC differences after FDR correction; blank lower-triangle cells are hidden by design.
+The fixed pairwise matrix compares methods using paired Wilcoxon tests over shared replicate IDs. Methods are ordered by mean AUC. The row method is the higher-AUC winner and the column method is the lower-AUC loser. Colored cells indicate significant positive mean AUC differences after FDR correction; gray cells are non-significant comparisons among the displayed upper triangle, and the lower triangle is hidden by design.
+
+The top-equivalent interpretation is the same as in the decay Level 3 view: a leading group is considered equivalent when all of its members are significantly better than the same next lower-ranked method by AUC. This identifies the statistically supported top tier without overclaiming significant differences inside that tier.
 
 Main outputs:
 
