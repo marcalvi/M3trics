@@ -8,6 +8,8 @@ This folder contains the notebooks and helper code used to summarize M3TRICS out
 
 The notebooks expect M3TRICS result folders under `../results/<dataset_tag>/training_runs/`. Generated summaries are written under analysis-specific output folders and can be regenerated from the notebooks.
 
+These notebooks currently cover classification results only. Modality-specific decay analysis notebooks and survival task analysis notebooks are not implemented yet.
+
 ## MM Decay / Ablation Study
 
 `MM_decay_analysis.ipynb` studies how each method behaves as missingness increases. For each method, seed, outer fold, and inner model, the notebook expands the stored predictions, computes replicate AUCs, aggregates them by missingness condition, and then builds rankings and statistical comparisons.
