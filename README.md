@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="M3TRICS" width="500">
+  <img src="assets/logo.png" alt="M3TRICS" width="360">
 </p>
 
 M3TRICS is a multimodal training and analysis framework for comparing missing-modality learning methods across clinical datasets. It handles dataset preprocessing, modality alignment, nested cross-validation, missing-modality ablation studies, fixed-dataset training, binary classification, survival modelling, and downstream statistical analysis.
