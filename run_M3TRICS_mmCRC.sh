@@ -30,8 +30,8 @@ DATA_ROOT="/nfs/rnas/projects/M3TRICS/data/inputs"
 # Define dataset name and endpoint CSV file
 # -----------------------------------------------------------------------------------------
 
-DATASET="MIMM"
-ENDPOINTS_CSV="patients_mimm.csv"
+DATASET="mmCRC"
+ENDPOINTS_CSV="mmCRC_endpoints.csv"
 
 # -----------------------------------------------------------------------------------------
 # 3. TASK CONFIGURATION
@@ -50,8 +50,8 @@ ENDPOINTS_CSV="patients_mimm.csv"
 # -----------------------------------------------------------------------------------------
 
 TASK_TYPE="binary_classification"
-PATIENT_ID_COL="patient"
-ENDPOINT_COL="OS_9_label"
+PATIENT_ID_COL="sap"
+ENDPOINT_COL="os_21_label"
 # SURVIVAL_LOSS="nll"
 # SURVIVAL_TIME_COL=""
 # SURVIVAL_EVENT_COL=""
@@ -77,8 +77,8 @@ RESULTS_ROOT="${PROJECT_ROOT}/results/${DATASET}_${ENDPOINT_COL}"
 # -----------------------------------------------------------------------------------------
 
 # Template:
-# PATH_NAME="PATH"
-# PATH_CSV="pathology_mimm.csv"
+# PATH_NAME="path"
+# PATH_CSV="mmCRC_pathology_data.csv"
 # PATH_DROP_COLS=""
 # PATH_AGGREGATION_METHOD=""
 # PATH_CATEGORICAL_IMPUTATION_METHOD="knn_mode"
@@ -88,25 +88,23 @@ RESULTS_ROOT="${PROJECT_ROOT}/results/${DATASET}_${ENDPOINT_COL}"
 
 # Path modality
 PATH_NAME="path"
-PATH_CSV="pathology_mimm.csv"
+PATH_CSV="mmCRC_pathology_data.csv"
 
 # Radiology modality
 RADIO_NAME="radio"
-RADIO_CSV="radiology_mimm.csv"
-RADIO_DROP_COLS="image_path,lesion_tag"
-RADIO_AGGREGATION_METHOD="mean"
+RADIO_CSV="mmCRC_radiology_data.csv"
 
 # Clinical modality
 CLIN_NAME="clin"
-CLIN_CSV="clinical_mimm.csv"
+CLIN_CSV="mmCRC_clinical_data.csv"
+CLIN_DROP_COLS="braf_mut_wt"
+CLIN_CATEGORICAL_COLS="had_adj_treat_post_primary_surgery, had_adj_treat_post_met_surgery, had_neoadjuvant_treatment, had_surgery_liver, had_surgery_other_mets,had_surgery_primary, met_treatment_mechanism_qmt, met_treatment_mechanism_aag, met_treatment_mechanism_ttantiegfr, met_treatment_mechanism_ttnonantiegfr, met_treatment_mechanism_imm, sex_male, sync_met_yes, msi_status_MSI, ras_mut_wt, met_tumor_site_liver_liver_limited, met_tumor_site_liver_liver_w_other, met_tumor_site_liver_other, primary_tumor_site_simple_Colon (unspecified), primary_tumor_site_simple_Left, primary_tumor_site_simple_Right"
+CLIN_CATEGORICAL_IMPUTATION_METHOD="knn_mode"
+CLIN_KNN_NEIGHBORS=5
 
 # Blood modality
 BLOOD_NAME="blood"
-BLOOD_CSV="blood_mimm.csv"
-
-# Radio-report modality
-RADIO_REPORT_NAME="radio_report"
-RADIO_REPORT_CSV="radioreports_mimm.csv"
+BLOOD_CSV="mmCRC_blood_data.csv"
 
 # -----------------------------------------------------------------------------------------
 # 5. TRAINING CONFIGURATION
@@ -119,7 +117,7 @@ RADIO_REPORT_CSV="radioreports_mimm.csv"
 # -----------------------------------------------------------------------------------------
 
 # Methods
-RUN_MODELS="Di-PAM, Di-MMLP, HealNet, SMILe"
+RUN_MODELS="ZI_MLP, KNN_MLP, VAE_MLP, pAM, Di-PAM, Di-MMLP, HealNet, SMILe"
 
 # Nested CV
 RETRAIN_OUTER="true"
@@ -148,10 +146,10 @@ MISSING_PATTERN_SEED=2026
 # the student receives synthetic missingness matching the original cohort missingness proportion.
 # -----------------------------------------------------------------------------------------
 
-MISSINGNESS_STUDY="true"
-MISSING_LOCATION="global"
-TRAIN_MISSING_PROP="0.0,0.2,0.4,0.6,0.8"
-TEST_MISSING_PROP="0.0,0.2,0.4,0.6,0.8"
+MISSINGNESS_STUDY="false"
+# MISSING_LOCATION="global"
+# TRAIN_MISSING_PROP="0.0,0.25,0.5,0.75"
+# TEST_MISSING_PROP="0.0,0.25,0.5,0.75"
 
 # -----------------------------------------------------------------------------------------
 # Wrap arguments and run m3trics script
@@ -193,7 +191,6 @@ add_modality_args "${PATH_NAME}" "${PATH_CSV}" "${PATH_DROP_COLS:-}" "${PATH_CAT
 add_modality_args "${RADIO_NAME}" "${RADIO_CSV}" "${RADIO_DROP_COLS:-}" "${RADIO_CATEGORICAL_COLS:-}" "${RADIO_AGGREGATION_METHOD:-}" "${RADIO_CATEGORICAL_IMPUTATION_METHOD:-}" "${RADIO_NUMERIC_IMPUTATION_METHOD:-}" "${RADIO_KNN_NEIGHBORS:-}"
 add_modality_args "${CLIN_NAME}" "${CLIN_CSV}" "${CLIN_DROP_COLS:-}" "${CLIN_CATEGORICAL_COLS:-}" "${CLIN_AGGREGATION_METHOD:-}" "${CLIN_CATEGORICAL_IMPUTATION_METHOD:-}" "${CLIN_NUMERIC_IMPUTATION_METHOD:-}" "${CLIN_KNN_NEIGHBORS:-}"
 add_modality_args "${BLOOD_NAME}" "${BLOOD_CSV}" "${BLOOD_DROP_COLS:-}" "${BLOOD_CATEGORICAL_COLS:-}" "${BLOOD_AGGREGATION_METHOD:-}" "${BLOOD_CATEGORICAL_IMPUTATION_METHOD:-}" "${BLOOD_NUMERIC_IMPUTATION_METHOD:-}" "${BLOOD_KNN_NEIGHBORS:-}"
-add_modality_args "${RADIO_REPORT_NAME}" "${RADIO_REPORT_CSV}" "${RADIO_REPORT_DROP_COLS:-}" "${RADIO_REPORT_CATEGORICAL_COLS:-}" "${RADIO_REPORT_AGGREGATION_METHOD:-}" "${RADIO_REPORT_CATEGORICAL_IMPUTATION_METHOD:-}" "${RADIO_REPORT_NUMERIC_IMPUTATION_METHOD:-}" "${RADIO_REPORT_KNN_NEIGHBORS:-}"
 
 M3TRICS_ARGS=(
   --dataset "${DATASET}"

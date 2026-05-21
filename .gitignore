@@ -1,24 +1,19 @@
+# OS/editor artifacts
+.DS_Store
+.Rhistory
+.vscode/
+
+# Python artifacts
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyo
+*.pyd
+.ipynb_checkpoints/
 
-.DS_Store
-.vscode/
-.idea/
-
-.env
-.venv/
-venv/
-env/
-
+# Generated outputs
 results/
 wandb/
-outputs/
-checkpoints/
-*.ckpt
-*.pth
-*.pt
-*.pkl
-*.joblib
-
-.ipynb_checkpoints/
+analysis/MM_decay_analysis_outputs/
+analysis/fixed_dataset_analysis_outputs/
+analysis/figures/
+analysis/data_exploration/figures/

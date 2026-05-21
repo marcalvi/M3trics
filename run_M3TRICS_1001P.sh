@@ -9,7 +9,11 @@ set -euo pipefail
 
 # Osiris cluster setup (VHIO)
 source /home/osiris-user/anaconda3/etc/profile.d/conda.sh
-conda activate TFM_5090
+conda activate TFM
+
+# Local setup (macOS)
+# source /opt/miniconda3/etc/profile.d/conda.sh
+# conda activate TFM
 
 # Optional WandB configuration
 WANDB_LOGIN_KEY="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"
@@ -27,11 +31,13 @@ DATA_ROOT="/nfs/rnas/projects/M3TRICS/data/inputs"
 
 # -----------------------------------------------------------------------------------------
 # 2. DATASET AND ENDPOINT
-# Define dataset name and endpoint CSV file
+# DATASET is the label used in outputs; DATASET_DIR is the actual input folder name.
+# Define endpoint CSV file here.
 # -----------------------------------------------------------------------------------------
 
-DATASET="MIMM"
-ENDPOINTS_CSV="patients_mimm.csv"
+DATASET="1001P"
+DATASET_DIR="1001Prostate"
+ENDPOINTS_CSV="endpoints_1001Prostate.csv"
 
 # -----------------------------------------------------------------------------------------
 # 3. TASK CONFIGURATION
@@ -51,7 +57,7 @@ ENDPOINTS_CSV="patients_mimm.csv"
 
 TASK_TYPE="binary_classification"
 PATIENT_ID_COL="patient"
-ENDPOINT_COL="OS_9_label"
+ENDPOINT_COL="OS_27_label"
 # SURVIVAL_LOSS="nll"
 # SURVIVAL_TIME_COL=""
 # SURVIVAL_EVENT_COL=""
@@ -86,27 +92,22 @@ RESULTS_ROOT="${PROJECT_ROOT}/results/${DATASET}_${ENDPOINT_COL}"
 # PATH_CATEGORICAL_COLS=""
 # PATH_KNN_NEIGHBORS=5
 
-# Path modality
-PATH_NAME="path"
-PATH_CSV="pathology_mimm.csv"
-
 # Radiology modality
 RADIO_NAME="radio"
-RADIO_CSV="radiology_mimm.csv"
-RADIO_DROP_COLS="image_path,lesion_tag"
-RADIO_AGGREGATION_METHOD="mean"
-
-# Clinical modality
-CLIN_NAME="clin"
-CLIN_CSV="clinical_mimm.csv"
+RADIO_CSV="radiology_1001prostate.csv"
+RADIO_DROP_COLS="study_date,time_to_diagnosis,source_file"
 
 # Blood modality
 BLOOD_NAME="blood"
-BLOOD_CSV="blood_mimm.csv"
+BLOOD_CSV="blood_1001prostate.csv"
+BLOOD_DROP_COLS="study_date,time_to_diagnosis,source_file"
+BLOOD_NUMERIC_IMPUTATION_METHOD="knn_mean"
+BLOOD_KNN_NEIGHBORS=5
 
 # Radio-report modality
 RADIO_REPORT_NAME="radio_report"
-RADIO_REPORT_CSV="radioreports_mimm.csv"
+RADIO_REPORT_CSV="radioreports_1001prostate.csv"
+RADIO_REPORT_DROP_COLS="study_date,time_to_diagnosis,source_file,report_text"
 
 # -----------------------------------------------------------------------------------------
 # 5. TRAINING CONFIGURATION
@@ -119,7 +120,7 @@ RADIO_REPORT_CSV="radioreports_mimm.csv"
 # -----------------------------------------------------------------------------------------
 
 # Methods
-RUN_MODELS="Di-PAM, Di-MMLP, HealNet, SMILe"
+RUN_MODELS="ZI_MLP, KNN_MLP, VAE_MLP, pAM, Di-PAM, Di-MMLP, HealNet, SMILe"
 
 # Nested CV
 RETRAIN_OUTER="true"
@@ -150,8 +151,8 @@ MISSING_PATTERN_SEED=2026
 
 MISSINGNESS_STUDY="true"
 MISSING_LOCATION="global"
-TRAIN_MISSING_PROP="0.0,0.2,0.4,0.6,0.8"
-TEST_MISSING_PROP="0.0,0.2,0.4,0.6,0.8"
+TRAIN_MISSING_PROP="0.0,0.33,0.66"
+TEST_MISSING_PROP="0.0,0.33,0.66"
 
 # -----------------------------------------------------------------------------------------
 # Wrap arguments and run m3trics script
@@ -167,7 +168,7 @@ add_modality_args() {
   local numeric_imputation_method="${7:-}"
   local knn_neighbors="${8:-}"
 
-  MODALITY_ARGS+=(--modality_csv "${modality_name}=${DATA_ROOT}/${DATASET}/${csv_filename}")
+  MODALITY_ARGS+=(--modality_csv "${modality_name}=${DATA_ROOT}/${DATASET_DIR}/${csv_filename}")
   if [[ -n "${drop_cols}" ]]; then
     MODALITY_ARGS+=(--drop_cols "${modality_name}=${drop_cols}")
   fi
@@ -189,16 +190,14 @@ add_modality_args() {
 }
 
 MODALITY_ARGS=()
-add_modality_args "${PATH_NAME}" "${PATH_CSV}" "${PATH_DROP_COLS:-}" "${PATH_CATEGORICAL_COLS:-}" "${PATH_AGGREGATION_METHOD:-}" "${PATH_CATEGORICAL_IMPUTATION_METHOD:-}" "${PATH_NUMERIC_IMPUTATION_METHOD:-}" "${PATH_KNN_NEIGHBORS:-}"
 add_modality_args "${RADIO_NAME}" "${RADIO_CSV}" "${RADIO_DROP_COLS:-}" "${RADIO_CATEGORICAL_COLS:-}" "${RADIO_AGGREGATION_METHOD:-}" "${RADIO_CATEGORICAL_IMPUTATION_METHOD:-}" "${RADIO_NUMERIC_IMPUTATION_METHOD:-}" "${RADIO_KNN_NEIGHBORS:-}"
-add_modality_args "${CLIN_NAME}" "${CLIN_CSV}" "${CLIN_DROP_COLS:-}" "${CLIN_CATEGORICAL_COLS:-}" "${CLIN_AGGREGATION_METHOD:-}" "${CLIN_CATEGORICAL_IMPUTATION_METHOD:-}" "${CLIN_NUMERIC_IMPUTATION_METHOD:-}" "${CLIN_KNN_NEIGHBORS:-}"
 add_modality_args "${BLOOD_NAME}" "${BLOOD_CSV}" "${BLOOD_DROP_COLS:-}" "${BLOOD_CATEGORICAL_COLS:-}" "${BLOOD_AGGREGATION_METHOD:-}" "${BLOOD_CATEGORICAL_IMPUTATION_METHOD:-}" "${BLOOD_NUMERIC_IMPUTATION_METHOD:-}" "${BLOOD_KNN_NEIGHBORS:-}"
 add_modality_args "${RADIO_REPORT_NAME}" "${RADIO_REPORT_CSV}" "${RADIO_REPORT_DROP_COLS:-}" "${RADIO_REPORT_CATEGORICAL_COLS:-}" "${RADIO_REPORT_AGGREGATION_METHOD:-}" "${RADIO_REPORT_CATEGORICAL_IMPUTATION_METHOD:-}" "${RADIO_REPORT_NUMERIC_IMPUTATION_METHOD:-}" "${RADIO_REPORT_KNN_NEIGHBORS:-}"
 
 M3TRICS_ARGS=(
   --dataset "${DATASET}"
   --results_root "${RESULTS_ROOT}"
-  --endpoint_csv "${DATA_ROOT}/${DATASET}/${ENDPOINTS_CSV}"
+  --endpoint_csv "${DATA_ROOT}/${DATASET_DIR}/${ENDPOINTS_CSV}"
   --patient_id_col "${PATIENT_ID_COL}"
   --endpoint_col "${ENDPOINT_COL}"
   --task_type "${TASK_TYPE}"
