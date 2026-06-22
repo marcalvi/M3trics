@@ -95,11 +95,12 @@ git remote -v
 # upstream  https://github.com/radiomicsgroup/m3trics.git (push)
 ```
 
+You can only push to your own fork (`origin`). You do not have write access to the original repository (`upstream`).
+
 **Step 4 — Pull updates from the original repo (whenever needed)**
 
 ```bash
-git fetch upstream
-git merge upstream/main
+git fetch upstream && git merge upstream/main
 ```
 
 Git will merge the upstream changes with your local modifications automatically. If you and the upstream edited the same lines, you will need to resolve conflicts manually before the merge completes.
