@@ -62,6 +62,50 @@ Hyperparameter grids live in `hyperparams/`. Each method config uses one `args` 
 
 SMILe learns its modality priors only from modality slots visible in the current training split and missingness condition. It does not recover synthetic hidden modalities from the complete base dataset.
 
+## 0. Fork This Repository
+
+If you want to use M3TRICS with your own datasets, the recommended approach is to fork this repository. That way you have your own independent copy where you can add data, modify launchers, and commit results — without affecting the main repository. You can still pull future updates from the original at any time.
+
+**Step 1 — Fork on GitHub**
+
+Go to [https://github.com/radiomicsgroup/m3trics](https://github.com/radiomicsgroup/m3trics) and click **Fork** (top-right). This creates a copy under your own GitHub account.
+
+**Step 2 — Clone your fork**
+
+```bash
+git clone https://github.com/<your-username>/m3trics.git
+cd m3trics
+```
+
+**Step 3 — Add the original repository as upstream**
+
+This lets you pull future updates from the main repo into your fork.
+
+```bash
+git remote add upstream https://github.com/radiomicsgroup/m3trics.git
+```
+
+Verify both remotes are set:
+
+```bash
+git remote -v
+# origin    https://github.com/<your-username>/m3trics.git (fetch)
+# origin    https://github.com/<your-username>/m3trics.git (push)
+# upstream  https://github.com/radiomicsgroup/m3trics.git (fetch)
+# upstream  https://github.com/radiomicsgroup/m3trics.git (push)
+```
+
+**Step 4 — Pull updates from the original repo (whenever needed)**
+
+```bash
+git fetch upstream
+git merge upstream/main
+```
+
+Git will merge the upstream changes with your local modifications automatically. If you and the upstream edited the same lines, you will need to resolve conflicts manually before the merge completes.
+
+---
+
 ## 1. Install The Environment
 
 Environment files and VHIO/OSIRIS-specific installation instructions are in:
