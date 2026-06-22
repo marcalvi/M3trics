@@ -12,9 +12,9 @@ source /home/osiris-user/anaconda3/etc/profile.d/conda.sh
 conda activate TFM_5090
 
 # Optional WandB configuration
-WANDB_LOGIN_KEY="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"
-WANDB_ENABLED="true"
-WANDB_MODE="online"
+WANDB_LOGIN_KEY="${WANDB_LOGIN_KEY:-}"
+WANDB_ENABLED="${WANDB_ENABLED:-false}"
+WANDB_MODE="${WANDB_MODE:-online}"
 
 # -----------------------------------------------------------------------------------------
 # 1. GENERAL PATHS
@@ -30,8 +30,8 @@ DATA_ROOT="/nfs/rnas/projects/M3TRICS/data/inputs"
 # Define dataset name and endpoint CSV file
 # -----------------------------------------------------------------------------------------
 
-DATASET="MIMM"
-ENDPOINTS_CSV="patients_mimm.csv"
+DATASET="mmImmuno"  # example dataset; replace with your dataset name
+ENDPOINTS_CSV="patients_mmImmuno.csv"  # example endpoint file
 
 # -----------------------------------------------------------------------------------------
 # 3. TASK CONFIGURATION
@@ -77,52 +77,85 @@ RESULTS_ROOT="${PROJECT_ROOT}/results/${DATASET}_${ENDPOINT_COL}"
 # -----------------------------------------------------------------------------------------
 
 # Template:
-# PATH_NAME="PATH"
-# PATH_CSV="pathology_mimm.csv"
-# PATH_DROP_COLS=""
-# PATH_AGGREGATION_METHOD=""
-# PATH_CATEGORICAL_IMPUTATION_METHOD="knn_mode"
-# PATH_NUMERIC_IMPUTATION_METHOD="knn_mean"
-# PATH_CATEGORICAL_COLS=""
-# PATH_KNN_NEIGHBORS=5
+# MODALITY_NAME="modality_name"
+# MODALITY_CSV="modality_file.csv"
+# MODALITY_DROP_COLS=""
+# MODALITY_AGGREGATION_METHOD=""
+# MODALITY_CATEGORICAL_IMPUTATION_METHOD="knn_mode"
+# MODALITY_NUMERIC_IMPUTATION_METHOD="knn_mean"
+# MODALITY_CATEGORICAL_COLS=""
+# MODALITY_KNN_NEIGHBORS=5
 
 # Path modality
 PATH_NAME="path"
-PATH_CSV="pathology_mimm.csv"
+PATH_CSV="pathology_mmImmuno.csv"
 
 # Radiology modality
 RADIO_NAME="radio"
-RADIO_CSV="radiology_mimm.csv"
+RADIO_CSV="radiology_mmImmuno.csv"
 RADIO_DROP_COLS="image_path,lesion_tag"
 RADIO_AGGREGATION_METHOD="mean"
 
 # Clinical modality
 CLIN_NAME="clin"
-CLIN_CSV="clinical_mimm.csv"
+CLIN_CSV="clinical_mmImmuno.csv"
 
 # Blood modality
 BLOOD_NAME="blood"
-BLOOD_CSV="blood_mimm.csv"
+BLOOD_CSV="blood_mmImmuno.csv"
 
 # Radio-report modality
 RADIO_REPORT_NAME="radio_report"
-RADIO_REPORT_CSV="radioreports_mimm.csv"
+RADIO_REPORT_CSV="radioreports_mmImmuno.csv"
 
 # -----------------------------------------------------------------------------------------
 # 5. TRAINING CONFIGURATION
 # Select the models to run after preprocessing.
-# Available methods: ZI_MLP, KNN_MLP, VAE_MLP, pAM, Di-PAM, Di-MMLP, HealNet, SMILe
+
+# Method compatibility overview:
+#   Binary-classification only:
+#     ZI_LR       = zero-imputed concatenated embeddings + LogisticRegression
+#     KNN_LR      = KNN-imputed concatenated embeddings + LogisticRegression
+#     ZI_RF       = zero-imputed concatenated embeddings + RandomForestClassifier
+#     KNN_RF      = KNN-imputed concatenated embeddings + RandomForestClassifier
+#     Note: RF means binary-classification Random Forest; RSF is the survival model.
+#   Survival only:
+#     ZI_CoxNet   = zero-imputed concatenated embeddings + regularized Cox elastic-net
+#     KNN_CoxNet  = KNN-imputed concatenated embeddings + regularized Cox elastic-net
+#     ZI_RSF      = zero-imputed concatenated embeddings + Random Survival Forest
+#     KNN_RSF     = KNN-imputed concatenated embeddings + Random Survival Forest
+#     Note: RSF means Random Survival Forest; it is not a binary-classification random forest.
+#   Binary classification and survival compatible:
+#     ZI_MLP, KNN_MLP, VAE_MLP, pAM, HealNet, SMILe
+
+# Example BC run:
+#   RUN_MODELS="ZI_LR,KNN_LR,ZI_RF,KNN_RF,ZI_MLP,KNN_MLP,pAM"
+# Example survival run:
+#   TASK_TYPE="survival"
+#   RUN_MODELS="ZI_CoxNet,KNN_CoxNet,ZI_RSF,KNN_RSF,ZI_MLP,KNN_MLP,HealNet"
+
 # Available scheduler types: cosine_annealing, reduce_lr_on_plateau
 #   cosine_annealing requires MIN_LR
 #   reduce_lr_on_plateau requires LR_PATIENCE
+
 # Missing pattern seed is fixed to ensure the same missingness patterns across seeds
 # -----------------------------------------------------------------------------------------
 
 # Methods
-RUN_MODELS="SMILe"
+RUN_MODELS="ZI_MLP"  # example; replace with any compatible methods listed above
+
+# Knowledge Distillation
+# DISTILL_MODELS is a comma-separated list of base methods that are also trained as _KD variants.
+# Base methods are launched automatically if missing from RUN_MODELS. The teacher is pretrained first;
+# then the student is trained with the configured modality availability. In progressive missingness mode
+# this means simulated missingness; in static-cohort mode this means the observed dataset as-is.
+# DISTILL_ALPHA weights the inner-representation matching loss. DISTILL_BETA weights the logit matching loss.
+DISTILL_MODELS="${DISTILL_MODELS:-}"
+DISTILL_ALPHA="${DISTILL_ALPHA:-0.25}"
+DISTILL_BETA="${DISTILL_BETA:-0.05}"
 
 # Nested CV
-RETRAIN_OUTER="true"
+RETRAIN_OUTER="false"
 SAVE_INNER="true"
 k=5
 INNER_SPLITS=${k}
@@ -130,26 +163,31 @@ OUTER_SPLITS=${k}
 
 # HPs
 HP_SELECTION_EPSILON="0.02"
-SCHEDULER_TYPE="cosine_annealing"
-MIN_LR="1e-6"
-# LR_PATIENCE=5
+SCHEDULER_TYPE="reduce_lr_on_plateau"
+# MIN_LR="1e-6"
+LR_PATIENCE=6
 
 # Seeds
-SEEDS="22,2002,4,18473,55602"
+SEEDS="55602"
+# Example multi-seed run: SEEDS="22,2002,4,18473,55602"
 MISSING_PATTERN_SEED=2026
 
 # -----------------------------------------------------------------------------------------
 # 6. PROGRESSIVE MISSINGNESS STUDY
-# Specify these values to perform the proposed progressive missingness study and decay analysis.
-# Note: this process needs a subset with all modalities available, so make sure N is large
+# Specify these values to perform the proposed progressive missingness study and downstream analysis.
+
+# Notes: this process needs a subset with all modalities available, so make sure N is large
 # enough to support meaningful statistical comparisons.
-# If MISSINGNESS_STUDY=false, synthetic missingness is disabled and the dataset is trained as-is.
-# Distillation note: in fixed dataset mode, Di-PAM/Di-MMLP use a complete-case subset;
-# the student receives synthetic missingness matching the original cohort missingness proportion.
+
+# Static-cohort mode: if MISSINGNESS_STUDY=false, synthetic missingness is disabled
+# and the input dataset is trained as-is, preserving its natural modality availability.
+
+# For _KD variants in static-cohort mode, the teacher is pretrained first and the
+# student is trained on the full observed cohort without extra synthetic missingness.
 # -----------------------------------------------------------------------------------------
 
 MISSINGNESS_STUDY="true"
-MISSING_LOCATION="global"
+DEGRADING_MODALITY="global"
 TRAIN_MISSING_PROP="0.0,0.2,0.4,0.6,0.8"
 TEST_MISSING_PROP="0.0,0.2,0.4,0.6,0.8"
 
@@ -203,6 +241,9 @@ M3TRICS_ARGS=(
   --endpoint_col "${ENDPOINT_COL}"
   --task_type "${TASK_TYPE}"
   --run_models "${RUN_MODELS}"
+  --distill_models "${DISTILL_MODELS}"
+  --distill_alpha "${DISTILL_ALPHA}"
+  --distill_beta "${DISTILL_BETA}"
   --inner_splits "${INNER_SPLITS}"
   --outer_splits "${OUTER_SPLITS}"
   --retrain_outer "${RETRAIN_OUTER}"
@@ -231,7 +272,7 @@ fi
 
 if [[ "${MISSINGNESS_STUDY}" == "true" ]]; then
   M3TRICS_ARGS+=(
-    --missing_location "${MISSING_LOCATION}"
+    --degrading_modality "${DEGRADING_MODALITY}"
     --train_missing_prop "${TRAIN_MISSING_PROP}"
     --test_missing_prop "${TEST_MISSING_PROP}"
   )

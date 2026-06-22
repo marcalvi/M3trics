@@ -209,6 +209,7 @@ def build_training_arg_parser():
     parser.add_argument("--odir", type=str, required=True, help="Output directory")
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name suffix")
     parser.add_argument("--endpoint", type=str, required=True, help="Endpoint base name")
+    parser.add_argument("--model_display_name", type=str, default=None, help=argparse.SUPPRESS)
     parser.add_argument(
         "--task_type",
         type=str,
@@ -245,7 +246,28 @@ def build_training_arg_parser():
         "--model",
         type=str,
         required=True,
-        choices=["MLP", "pAM", "Di-PAM", "DiPAM", "DiMMLP", "Di-MMLP", "HealNet", "SMILe"],
+        choices=[
+            "LR",
+            "lr",
+            "LogisticRegression",
+            "logistic_regression",
+            "logreg",
+            "RF",
+            "rf",
+            "RandomForest",
+            "RandomForestClassifier",
+            "random_forest",
+            "random_forest_classifier",
+            "CoxNet",
+            "coxnet",
+            "RSF",
+            "rsf",
+            "RandomSurvivalForest",
+            "MLP",
+            "pAM",
+            "HealNet",
+            "SMILe",
+        ],
     )
     parser.add_argument(
         "--dataset_dir",
@@ -279,10 +301,19 @@ def build_training_arg_parser():
         ),
     )
     parser.add_argument(
+        "--use_ensemble",
+        type=_parse_bool_flag,
+        default=False,
+        help=(
+            "If true, save probability-averaged ensemble columns in test_predictions.csv "
+            "and use them as the analysis replicate in the provided notebooks."
+        ),
+    )
+    parser.add_argument(
         "--missingness_study",
         type=_parse_bool_flag,
         default=True,
-        help="If false, disable synthetic missingness and train only on the fixed observed multimodal dataset.",
+        help="If false, disable synthetic missingness and train in static-cohort mode using the observed multimodal dataset as-is.",
     )
     parser.add_argument("--learning_rate", type=str, default="5e-5")
     parser.add_argument("--weight_decay", type=str, default="1e-4")
@@ -317,16 +348,22 @@ def build_training_arg_parser():
     parser.add_argument("--pam_dropout", type=str, default="0.4")
     parser.add_argument("--pam_temperature", type=str, default="2.0")
     parser.add_argument(
+        "--knowledge_distillation",
+        type=_parse_bool_flag,
+        default=False,
+        help="If true, pretrain a teacher first and then train the selected model as a distilled student.",
+    )
+    parser.add_argument(
         "--distill_alpha",
         type=str,
         default="1.0",
-        help="Weight a for representation distillation loss in Di-PAM / Di-MMLP. Supports scalar or comma-separated list.",
+        help="Weight for representation distillation loss. Supports scalar or comma-separated list.",
     )
     parser.add_argument(
         "--distill_beta",
         type=str,
         default="0.3",
-        help="Weight b for feature/logit distillation loss in Di-PAM / Di-MMLP. Supports scalar or comma-separated list.",
+        help="Weight for logit/feature distillation loss. Supports scalar or comma-separated list.",
     )
     parser.add_argument("--smil_e_latent_dim", type=str, default="64")
     parser.add_argument("--smil_e_num_priors", type=str, default="64")
@@ -361,10 +398,15 @@ def build_training_arg_parser():
         help="Train/validation missing proportion in [0, 1]. Supports scalar or comma-separated list.",
     )
     parser.add_argument(
+        "--degrading_modality",
         "--missing_location",
+        dest="degrading_modality",
         type=str,
         default="global",
-        help="Missing location: global or modality key (path, radio, clin, blood, radio_report). Supports scalar or comma-separated list.",
+        help=(
+            "Degrading modality: global or modality key (path, radio, clin, blood, radio_report). "
+            "Supports scalar or comma-separated list. --missing_location is kept as a deprecated alias."
+        ),
     )
     parser.add_argument(
         "--test_missing_prop",
@@ -385,6 +427,28 @@ def build_training_arg_parser():
     parser.add_argument("--vae_imputer_batch_size", type=int, default=64)
     parser.add_argument("--vae_imputer_lr", type=float, default=1e-3)
     parser.add_argument("--vae_imputer_beta", type=float, default=1e-3)
+    parser.add_argument("--lr_C", type=str, default="1.0")
+    parser.add_argument("--lr_penalty", type=str, default="l2")
+    parser.add_argument("--lr_solver", type=str, default="lbfgs")
+    parser.add_argument("--lr_class_weight", type=str, default="none")
+    parser.add_argument("--lr_max_iter", type=str, default="1000")
+    parser.add_argument("--rf_n_estimators", type=str, default="200")
+    parser.add_argument("--rf_max_depth", type=str, default="none")
+    parser.add_argument("--rf_min_samples_split", type=str, default="2")
+    parser.add_argument("--rf_min_samples_leaf", type=str, default="1")
+    parser.add_argument("--rf_max_features", type=str, default="sqrt")
+    parser.add_argument("--rf_class_weight", type=str, default="none")
+    parser.add_argument("--rf_n_jobs", type=str, default="-1")
+    parser.add_argument("--coxnet_alpha", type=str, default="0.1")
+    parser.add_argument("--coxnet_l1_ratio", type=str, default="0.5")
+    parser.add_argument("--coxnet_max_iter", type=str, default="100000")
+    parser.add_argument("--coxnet_tol", type=str, default="1e-7")
+    parser.add_argument("--rsf_n_estimators", type=str, default="100")
+    parser.add_argument("--rsf_max_depth", type=str, default="none")
+    parser.add_argument("--rsf_min_samples_split", type=str, default="6")
+    parser.add_argument("--rsf_min_samples_leaf", type=str, default="3")
+    parser.add_argument("--rsf_max_features", type=str, default="sqrt")
+    parser.add_argument("--rsf_n_jobs", type=str, default="-1")
     parser.add_argument("--attention_pooling_hidden_dim", type=int, default=128)
     parser.add_argument("--attention_pooling_dropout", type=float, default=0.1)
     parser.add_argument("--attention_pooling_epochs", type=int, default=25)
@@ -422,7 +486,7 @@ def _build_output_dir(
     model_name,
     imputation_method,
     dataset_name,
-    missing_location,
+    degrading_modality,
     train_missing_prop,
     seed,
     missingness_study=True,
@@ -437,7 +501,7 @@ def _build_output_dir(
         "radio_report": "RADIO_REPORT",
         "blood": "BLOOD",
     }
-    key = str(missing_location).strip().lower()
+    key = str(degrading_modality).strip().lower()
     missing_modality_label = mapping.get(key, key.upper())
     missing_pct = str(float(train_missing_prop) * 100.0)
     return os.path.join(
@@ -464,7 +528,7 @@ def _save_run_outputs(
     split_df,
     test_predictions_df,
     seed,
-    missing_location,
+    degrading_modality,
     train_missing_prop,
 ):
     os.makedirs(odir, exist_ok=True)
@@ -476,19 +540,19 @@ def _save_run_outputs(
     test_predictions_df = test_predictions_df.copy()
 
     inner_df["seed"] = seed
-    inner_df["missing_location"] = missing_location
+    inner_df["degrading_modality"] = degrading_modality
     inner_df["train_missing_prop"] = float(train_missing_prop)
 
     outer_df["seed"] = seed
-    outer_df["missing_location"] = missing_location
+    outer_df["degrading_modality"] = degrading_modality
     outer_df["train_missing_prop"] = float(train_missing_prop)
 
     history_df["seed"] = seed
-    history_df["missing_location"] = missing_location
+    history_df["degrading_modality"] = degrading_modality
     history_df["train_missing_prop"] = float(train_missing_prop)
 
     split_df["seed"] = seed
-    split_df["missing_location"] = missing_location
+    split_df["degrading_modality"] = degrading_modality
     split_df["train_missing_prop"] = float(train_missing_prop)
 
     test_predictions_df["seed"] = seed
@@ -519,7 +583,7 @@ def _save_run_outputs(
 
 
 def _build_test_eval_setups_for_run(
-    missing_location,
+    degrading_modality,
     train_missing_prop,
     test_missing_props,
     num_modalities,
@@ -527,10 +591,10 @@ def _build_test_eval_setups_for_run(
 ):
     from dataset import MissingModalitySimulator
 
-    missing_location = str(missing_location).strip().lower()
+    degrading_modality = str(degrading_modality).strip().lower()
     train_missing_prop = float(train_missing_prop)
 
-    if missing_location == "global":
+    if degrading_modality == "global":
         eval_props = [float(p) for p in test_missing_props]
     elif train_missing_prop == 0.0:
         eval_props = [float(p) for p in test_missing_props]
@@ -540,13 +604,13 @@ def _build_test_eval_setups_for_run(
     setups = OrderedDict()
     for prop in eval_props:
         setups[float(prop)] = {
-            "missing_location": missing_location,
+            "degrading_modality": degrading_modality,
             "missing_prop": float(prop),
             "simulator": MissingModalitySimulator(
                 num_modalities=num_modalities,
                 modality_names=modality_names,
                 missing_prop=float(prop),
-                missing_location=missing_location,
+                degrading_modality=degrading_modality,
             ),
         }
     return list(setups.values())
@@ -560,71 +624,69 @@ def run_training_from_args(args):
 
     start_time = time.time()
     from dataset import MissingModalitySimulator, load_or_preprocess_dataset
-    from scripts.train_ncv import nested_cv, _observed_modality_missing_prop
+    from scripts.train_ncv import nested_cv
     from scripts.utils import build_hyperparameter_grid
 
     model_name_norm = _normalize_model_name(args.model)
+    knowledge_distillation = bool(getattr(args, "knowledge_distillation", False))
     print("Running")
 
-    if str(args.imputation_method).strip().lower() != "zero" and model_name_norm != "mlp":
+    imputation_method_l = str(args.imputation_method).strip().lower()
+    task_type_norm = normalize_task_type(args.task_type)
+    sklearn_classification_models = {"lr", "rf"}
+    survival_sklearn_models = {"coxnet", "rsf"}
+    if model_name_norm in sklearn_classification_models and task_type_norm == "survival":
+        raise ValueError("ZI_LR, KNN_LR, ZI_RF and KNN_RF are classification-only baselines and do not support task_type=survival.")
+    if model_name_norm in survival_sklearn_models and task_type_norm != "survival":
+        raise ValueError("ZI_CoxNet, KNN_CoxNet, ZI_RSF and KNN_RSF are survival-only baselines.")
+    if knowledge_distillation and model_name_norm in (sklearn_classification_models | survival_sklearn_models):
+        raise ValueError("Knowledge distillation is available only for differentiable torch models, not sklearn baselines.")
+    if knowledge_distillation and model_name_norm in {"smil_e"}:
+        raise ValueError("Knowledge distillation is not enabled for SMILe because it uses a dedicated meta-learning training loop.")
+    if model_name_norm in sklearn_classification_models and imputation_method_l not in {"zero", "knn"}:
+        raise ValueError("LR and RF baselines support imputation_method='zero' or 'knn' only.")
+    if model_name_norm in survival_sklearn_models and imputation_method_l not in {"zero", "knn"}:
+        raise ValueError("CoxNet and RSF baselines support imputation_method='zero' or 'knn' only.")
+    if imputation_method_l == "vae" and model_name_norm != "mlp":
+        raise ValueError("imputation_method='vae' is currently supported only with model='MLP'.")
+    if imputation_method_l == "knn" and model_name_norm not in {"mlp", "lr", "rf", "coxnet", "rsf"}:
         raise ValueError(
-            "imputation_method='knn' or 'vae' is currently supported only with model='MLP'."
+            "imputation_method='knn' is currently supported only with model='MLP', 'LR', 'RF', 'CoxNet' or 'RSF'."
         )
 
     inst_df, dfs, label_col, patient_id_col, task_config = load_or_preprocess_dataset(args)
     modality_names = list(dfs.keys())
     num_modalities = len(modality_names)
 
-    fixed_distillation_student_missing_prop = None
-    fixed_distillation_complete_case = (
-        not bool(args.missingness_study)
-        and model_name_norm in {"dipam", "di_mmlp"}
-    )
-    if fixed_distillation_complete_case:
-        fixed_distillation_student_missing_prop = _observed_modality_missing_prop(
-            dfs=dfs,
-            inst_df=inst_df,
-            patient_id_col=patient_id_col,
-        )
-        patients_before = int(len(inst_df))
-        dfs, inst_df, fixed_complete_summary = align_complete_multimodal_cohort(
-            modality_frames=dfs,
-            endpoint_df=inst_df,
-            patient_id_col=patient_id_col,
-        )
-        patients_after = int(len(inst_df))
-        print(
-            "Fixed-dataset distillation uses complete-case subsampling: "
-            f"{patients_after}/{patients_before} patients retained."
-        )
-        print(
-            "Fixed-dataset distillation student missingness from pre-subsampling cohort: "
-            f"{fixed_distillation_student_missing_prop:.4f}"
-        )
+    # Static-cohort mode keeps the observed cohort exactly as provided.
+    # Distilled variants pretrain a teacher first, but the student still sees
+    # the full input cohort and its natural modality-availability pattern; no
+    # complete-case subsampling or synthetic missingness is introduced here.
 
-    print(f"Dataframes read. Starting {args.model} training.")
+    run_model_label = str(args.model_display_name or (str(args.model) + ("_KD" if knowledge_distillation else "")))
+    print(f"Dataframes read. Starting {run_model_label} training.")
 
     seeds_list = _parse_seed_list(args.seeds)
     print(f"Parsed seeds: {seeds_list}")
     if bool(args.missingness_study):
-        missing_locations = _parse_training_value_or_list(args.missing_location, str, to_lower=True)
+        degrading_modalities = _parse_training_value_or_list(args.degrading_modality, str, to_lower=True)
         train_missing_props = _parse_training_value_or_list(args.train_missing_prop, float)
         test_missing_props = _parse_training_value_or_list(args.test_missing_prop, float)
     else:
-        missing_locations = ["global"]
+        degrading_modalities = ["global"]
         train_missing_props = [0.0]
         test_missing_props = [0.0]
 
-    invalid_train_locations = [
-        loc for loc in missing_locations if loc != "global" and loc not in modality_names
+    invalid_degrading_modalities = [
+        loc for loc in degrading_modalities if loc != "global" and loc not in modality_names
     ]
     invalid_test_props = [p for p in test_missing_props if p < 0.0 or p > 1.0]
     invalid_train_props = [p for p in train_missing_props if p < 0.0 or p > 1.0]
     modality_pooling = _parse_modality_pooling(args.modality_pooling)
-    if invalid_train_locations:
+    if invalid_degrading_modalities:
         valid = ", ".join(["global"] + sorted(modality_names))
         raise ValueError(
-            f"Invalid --missing_location values: {', '.join(sorted(set(invalid_train_locations)))}. "
+            f"Invalid --degrading_modality values: {', '.join(sorted(set(invalid_degrading_modalities)))}. "
             f"Valid values: {valid}"
         )
     if invalid_train_props:
@@ -642,18 +704,18 @@ def run_training_from_args(args):
             f"Available modalities: {', '.join(sorted(modality_names))}"
         )
 
-    combo_count = len(seeds_list) * len(missing_locations) * len(train_missing_props)
+    combo_count = len(seeds_list) * len(degrading_modalities) * len(train_missing_props)
     test_eval_total = len(seeds_list) * sum(
         len(
             _build_test_eval_setups_for_run(
-                missing_location=loc,
+                degrading_modality=loc,
                 train_missing_prop=prop,
                 test_missing_props=test_missing_props,
                 num_modalities=num_modalities,
                 modality_names=modality_names,
             )
         )
-        for loc in missing_locations
+        for loc in degrading_modalities
         for prop in train_missing_props
     )
     print(f"Total training runs to execute: {combo_count}")
@@ -662,48 +724,34 @@ def run_training_from_args(args):
     wandb_enabled_flag = bool(args.wandb and args.wandb_mode != "disabled")
 
     for seed in seeds_list:
-        for missing_location in missing_locations:
+        for degrading_modality in degrading_modalities:
             for train_missing_prop in train_missing_props:
                 hp_configs = build_hyperparameter_grid(
                     args,
                     train_missing_prop=train_missing_prop,
-                    missing_location=missing_location,
+                    degrading_modality=degrading_modality,
                 )
 
                 train_missing_simulator = MissingModalitySimulator(
                     num_modalities=num_modalities,
                     modality_names=modality_names,
                     missing_prop=float(train_missing_prop),
-                    missing_location=missing_location,
+                    degrading_modality=degrading_modality,
                 )
 
                 test_eval_setups = _build_test_eval_setups_for_run(
-                    missing_location=missing_location,
+                    degrading_modality=degrading_modality,
                     train_missing_prop=train_missing_prop,
                     test_missing_props=test_missing_props,
                     num_modalities=num_modalities,
                     modality_names=modality_names,
                 )
-                if fixed_distillation_complete_case and fixed_distillation_student_missing_prop > 0.0:
-                    test_eval_setups = [
-                        {
-                            "missing_location": "global",
-                            "missing_prop": float(fixed_distillation_student_missing_prop),
-                            "simulator": MissingModalitySimulator(
-                                num_modalities=num_modalities,
-                                modality_names=modality_names,
-                                missing_prop=float(fixed_distillation_student_missing_prop),
-                                missing_location="global",
-                            ),
-                        }
-                    ]
-
                 odir = _build_output_dir(
                     base_odir=args.odir,
                     model_name=args.model,
                     imputation_method=args.imputation_method,
                     dataset_name=args.dataset,
-                    missing_location=missing_location,
+                    degrading_modality=degrading_modality,
                     train_missing_prop=train_missing_prop,
                     seed=seed,
                     missingness_study=bool(args.missingness_study),
@@ -711,14 +759,19 @@ def run_training_from_args(args):
                 best_epoch_warmup = min(5, int(args.epochs))
                 print(
                     "Running seed="
-                    f"{seed}, missing_location={missing_location}, "
+                    f"{seed}, degrading_modality={degrading_modality}, "
                     f"train_missing_prop={train_missing_prop}"
                 )
                 print(f"Missing pattern seed: {int(args.missing_pattern_seed)}")
                 print(f"Best-epoch warmup: {best_epoch_warmup}")
                 print(f"Retrain outer train: {bool(args.retrain_outer)}")
                 print(f"Save inner outputs: {bool(args.save_inner)}")
+                print(f"Use ensemble predictions: {bool(args.use_ensemble)}")
                 print(f"Progressive missingness study: {bool(args.missingness_study)}")
+                print(f"Knowledge distillation: {bool(knowledge_distillation)}")
+                if knowledge_distillation:
+                    print(f"Distillation alpha grid: {args.distill_alpha}")
+                    print(f"Distillation beta grid: {args.distill_beta}")
                 resolved_task_type = normalize_task_type(args.task_type)
                 print(f"Task type: {resolved_task_type}")
                 if resolved_task_type == "survival":
@@ -735,8 +788,10 @@ def run_training_from_args(args):
 
                 wandb_base_config = {
                     "endpoint": args.endpoint,
-                    "model": str(args.model),
+                    "model": str(run_model_label),
+                    "model_base": str(args.model),
                     "model_canonical": model_name_norm,
+                    "knowledge_distillation": bool(knowledge_distillation),
                     "dataset": args.dataset,
                     "modalities": modality_names,
                     "hp_grid_size": len(hp_configs),
@@ -744,19 +799,14 @@ def run_training_from_args(args):
                     "task_type": normalize_task_type(args.task_type),
                     "retrain_outer": bool(args.retrain_outer),
                     "save_inner": bool(args.save_inner),
+                    "use_ensemble": bool(args.use_ensemble),
                     "missingness_study": bool(args.missingness_study),
-                    "fixed_distillation_complete_case": bool(fixed_distillation_complete_case),
-                    "fixed_distillation_student_missing_prop": (
-                        None
-                        if fixed_distillation_student_missing_prop is None
-                        else float(fixed_distillation_student_missing_prop)
-                    ),
                     "best_epoch_warmup": best_epoch_warmup,
                     "inner_splits": args.inner_splits,
                     "outer_splits": args.outer_splits,
                     "hp_selection_epsilon": float(args.hp_selection_epsilon),
                     "train_missing_prop": float(train_missing_prop),
-                    "missing_location": str(missing_location).lower(),
+                    "degrading_modality": str(degrading_modality).lower(),
                     "missing_pattern_seed": int(args.missing_pattern_seed),
                     "imputation_method": args.imputation_method,
                     "modality_pooling": dict(modality_pooling),
@@ -764,8 +814,8 @@ def run_training_from_args(args):
                     "test_missing_props_grid": ",".join(
                         str(float(setup["missing_prop"])) for setup in test_eval_setups
                     ),
-                    "eval_missing_locations_grid": ",".join(
-                        str(setup["missing_location"]).lower() for setup in test_eval_setups
+                    "eval_degrading_modalities_grid": ",".join(
+                        str(setup["degrading_modality"]).lower() for setup in test_eval_setups
                     ),
                 }
                 if str(args.imputation_method).strip().lower() == "vae":
@@ -825,7 +875,7 @@ def run_training_from_args(args):
                     lr_patience=int(args.lr_patience),
                     hp_selection_epsilon=float(args.hp_selection_epsilon),
                     missingness_study=bool(args.missingness_study),
-                    fixed_distillation_student_missing_prop=fixed_distillation_student_missing_prop,
+                    use_ensemble=bool(args.use_ensemble),
                     attention_pooling_kwargs={
                         "hidden_dim": int(args.attention_pooling_hidden_dim),
                         "dropout": float(args.attention_pooling_dropout),
@@ -845,7 +895,7 @@ def run_training_from_args(args):
                     split_df=split_df,
                     test_predictions_df=test_predictions_df,
                     seed=seed,
-                    missing_location=missing_location,
+                    degrading_modality=degrading_modality,
                     train_missing_prop=float(train_missing_prop),
                 )
 
@@ -860,7 +910,7 @@ def run_training_from_args(args):
                         model_name=args.model,
                         imputation_method=args.imputation_method,
                         dataset_name=args.dataset,
-                        missing_location=missing_location,
+                        degrading_modality=degrading_modality,
                         train_missing_prop=train_missing_prop,
                         seed=seed,
                         missingness_study=bool(args.missingness_study),
@@ -873,7 +923,7 @@ def run_training_from_args(args):
                         split_df=split_df,
                         test_predictions_df=auxiliary_outputs["test_predictions_df"],
                         seed=seed,
-                        missing_location=missing_location,
+                        degrading_modality=degrading_modality,
                         train_missing_prop=float(train_missing_prop),
                     )
                     print(f"Saved retained-inner outputs to: {auxiliary_odir}")
@@ -888,8 +938,29 @@ def training_cli_main(argv=None):
 
 # ------------------------ M3TRICS PREPROCESS CLI ---------------------
 
+def _model_config_args(model_config):
+    """Return model arguments from the current schema, with legacy fallback.
+
+    Values with comma-separated options are expanded later by
+    build_hyperparameter_grid; scalar values remain fixed automatically.
+    """
+    config_args = {}
+    config_args.update(dict(model_config.get("fixed_args", {})))
+    config_args.update(dict(model_config.get("hp_grid_args", {})))
+    config_args.update(dict(model_config.get("args", {})))
+    return config_args
+
+
+def _model_config_paired_groups(model_config):
+    return (
+        model_config.get("paired_args")
+        or model_config.get("paired_hp_grid_args")
+        or []
+    )
+
+
 def _build_training_args_from_model_config(shared_args, model_config, modality_pooling):
-    fixed_args = dict(model_config.get("fixed_args", {}))
+    config_args = _model_config_args(model_config)
     output_root = os.path.join(
         shared_args.results_root,
         "training_runs",
@@ -899,6 +970,8 @@ def _build_training_args_from_model_config(shared_args, model_config, modality_p
     arg_list = [
         "--model",
         str(model_config["model"]),
+        "--model_display_name",
+        str(model_config["display_name"]),
         "--dataset",
         str(shared_args.dataset),
         "--odir",
@@ -916,15 +989,23 @@ def _build_training_args_from_model_config(shared_args, model_config, modality_p
         "--outer_splits",
         str(int(shared_args.outer_splits)),
         "--epochs",
-        str(int(fixed_args.get("epochs", 80))),
+        str(int(config_args.get("epochs", 80))),
         "--retrain_outer",
         str(bool(shared_args.retrain_outer)).lower(),
         "--save_inner",
         str(bool(shared_args.save_inner)).lower(),
+        "--use_ensemble",
+        str(bool(shared_args.use_ensemble)).lower(),
         "--missingness_study",
         str(bool(shared_args.missingness_study)).lower(),
+        "--knowledge_distillation",
+        str(bool(model_config.get("knowledge_distillation", False))).lower(),
         "--hp_selection_epsilon",
         str(float(shared_args.hp_selection_epsilon)),
+        "--distill_alpha",
+        str(shared_args.distill_alpha),
+        "--distill_beta",
+        str(shared_args.distill_beta),
         "--scheduler_type",
         str(shared_args.scheduler_type),
         "--seeds",
@@ -952,15 +1033,15 @@ def _build_training_args_from_model_config(shared_args, model_config, modality_p
     if bool(shared_args.missingness_study):
         arg_list.extend(
             [
-                "--missing_location",
-                str(shared_args.missing_location),
+                "--degrading_modality",
+                str(shared_args.degrading_modality),
                 "--train_missing_prop",
                 str(shared_args.train_missing_prop),
                 "--test_missing_prop",
                 str(shared_args.test_missing_prop),
             ]
         )
-    for arg_name, arg_value in fixed_args.items():
+    for arg_name, arg_value in config_args.items():
         if arg_name == "epochs":
             continue
         arg_list.extend([f"--{arg_name}", str(arg_value)])
@@ -978,10 +1059,7 @@ def _build_training_args_from_model_config(shared_args, model_config, modality_p
             ]
         )
 
-    for arg_name, arg_value in model_config.get("hp_grid_args", {}).items():
-        arg_list.extend([f"--{arg_name}", str(arg_value)])
-
-    paired_hp_groups = model_config.get("paired_hp_grid_args", [])
+    paired_hp_groups = _model_config_paired_groups(model_config)
     if paired_hp_groups:
         serialized_groups = ";".join(
             ",".join(str(name) for name in group)
@@ -994,22 +1072,56 @@ def _build_training_args_from_model_config(shared_args, model_config, modality_p
     return parse_training_args(arg_list)
 
 
+def _distilled_model_config(base_config):
+    distilled = {key: value for key, value in dict(base_config).items()}
+    distilled["display_name"] = f"{base_config['display_name']}_KD"
+    distilled["knowledge_distillation"] = True
+    return distilled
+
+
 def _run_selected_models(args, modality_configs):
     selected_models = _parse_csv_list(args.run_models)
-    if not selected_models:
+    distill_models = _parse_csv_list(getattr(args, "distill_models", ""))
+    if not selected_models and not distill_models:
         print("No training models selected. Stopping after preprocessing.")
         return
 
+    selected_lookup = {str(name).strip().lower().replace(" ", ""): name for name in selected_models}
+    launch_configs = []
+    launched_keys = set()
+    for raw_model_name in selected_models:
+        key = str(raw_model_name).strip().lower().replace(" ", "")
+        launch_configs.append(get_model_config(raw_model_name))
+        launched_keys.add((key, False))
+    for raw_model_name in distill_models:
+        key = str(raw_model_name).strip().lower().replace(" ", "")
+        base_config = get_model_config(raw_model_name)
+        if (key, False) not in launched_keys:
+            launch_configs.append(base_config)
+            launched_keys.add((key, False))
+            selected_lookup[key] = raw_model_name
+            print(
+                f"Info: distill model '{raw_model_name}' was not present in RUN_MODELS; "
+                "launching the base method as well."
+            )
+        if (key, True) not in launched_keys:
+            launch_configs.append(_distilled_model_config(base_config))
+            launched_keys.add((key, True))
+
     training_modality_pooling = _build_training_modality_pooling(modality_configs)
     print("\n=== Training Launch ===")
-    print(f"Selected models: {', '.join(selected_models)}")
+    print(f"Selected models: {', '.join([cfg['display_name'] for cfg in launch_configs])}")
     print(f"Seeds: {args.seeds}")
     print(f"Missing pattern seed: {args.missing_pattern_seed}")
     print(f"Inner splits: {args.inner_splits}")
     print(f"Outer splits: {args.outer_splits}")
     print(f"Retrain outer: {bool(args.retrain_outer)}")
     print(f"Save inner outputs: {bool(args.save_inner)}")
+    print(f"Use ensemble predictions: {bool(args.use_ensemble)}")
     print(f"Progressive missingness study: {bool(args.missingness_study)}")
+    print(f"Distillation models: {args.distill_models or 'none'}")
+    print(f"Distillation alpha grid: {args.distill_alpha}")
+    print(f"Distillation beta grid: {args.distill_beta}")
     print(f"Task type: {normalize_task_type(args.task_type)}")
     if normalize_task_type(args.task_type) == "survival":
         print(
@@ -1022,14 +1134,13 @@ def _run_selected_models(args, modality_configs):
     if bool(args.missingness_study):
         print(f"Train missing prop: {args.train_missing_prop}")
         print(f"Test missing prop: {args.test_missing_prop}")
-        print(f"Missing location: {args.missing_location}")
+        print(f"Degrading modality: {args.degrading_modality}")
     else:
-        print("Fixed dataset mode: synthetic missingness disabled.")
+        print("Static-cohort mode: synthetic missingness disabled; dataset is trained as-is.")
     if training_modality_pooling:
         print(f"Duplicate-row aggregation for training: {training_modality_pooling}")
 
-    for raw_model_name in selected_models:
-        model_config = get_model_config(raw_model_name)
+    for model_config in launch_configs:
         training_args = _build_training_args_from_model_config(
             shared_args=args,
             model_config=model_config,
@@ -1077,14 +1188,24 @@ def build_preprocessing_arg_parser():
         type=str,
         default="",
         help=(
-            "Comma-separated list of model configs to launch after preprocessing. "
+            "Comma-separated list of base model configs to launch after preprocessing. "
             f"Available: {', '.join(list_available_model_configs())}"
+        ),
+    )
+    parser.add_argument(
+        "--distill_models",
+        type=str,
+        default="",
+        help=(
+            "Comma-separated list of base model configs to additionally train with knowledge distillation. "
+            "Each distilled run uses the same base config and is saved with a _KD suffix."
         ),
     )
     parser.add_argument("--inner_splits", required=True, type=int)
     parser.add_argument("--outer_splits", required=True, type=int)
     parser.add_argument("--retrain_outer", required=True, type=_parse_bool_flag)
     parser.add_argument("--save_inner", type=_parse_bool_flag, default=False)
+    parser.add_argument("--use_ensemble", type=_parse_bool_flag, default=False)
     parser.add_argument("--missingness_study", type=_parse_bool_flag, default=True)
     parser.add_argument("--hp_selection_epsilon", type=float, default=0.02)
     parser.add_argument(
@@ -1095,7 +1216,9 @@ def build_preprocessing_arg_parser():
     )
     parser.add_argument("--min_lr", type=float, default=1e-6)
     parser.add_argument("--lr_patience", type=int, default=5)
-    parser.add_argument("--missing_location", default="global", type=str)
+    parser.add_argument("--distill_alpha", type=str, default="1.0")
+    parser.add_argument("--distill_beta", type=str, default="0.3")
+    parser.add_argument("--degrading_modality", "--missing_location", dest="degrading_modality", default="global", type=str)
     parser.add_argument("--train_missing_prop", default="0", type=str)
     parser.add_argument("--test_missing_prop", default="0", type=str)
     parser.add_argument("--seeds", required=True, type=str)
