@@ -92,10 +92,9 @@ git remote -v
 # origin    https://github.com/<your-username>/m3trics.git (fetch)
 # origin    https://github.com/<your-username>/m3trics.git (push)
 # upstream  https://github.com/radiomicsgroup/m3trics.git (fetch)
-# upstream  https://github.com/radiomicsgroup/m3trics.git (push)
 ```
 
-You can only push to your own fork (`origin`). You do not have write access to the original repository (`upstream`).
+`origin` is your fork — you push your changes here. `upstream` is read-only — you only use it to pull updates from the original repository.
 
 **Step 4 — Pull updates from the original repo (whenever needed)**
 
