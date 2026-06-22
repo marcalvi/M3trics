@@ -73,7 +73,7 @@ Go to [https://github.com/radiomicsgroup/m3trics](https://github.com/radiomicsgr
 **Step 2 — Clone your fork**
 
 ```bash
-git clone https://github.com/<your-username>/m3trics.git
+git clone https://github.com/<your-username>/<your-repo-name>.git
 cd m3trics
 ```
 
@@ -89,8 +89,8 @@ Verify both remotes are set:
 
 ```bash
 git remote -v
-# origin    https://github.com/<your-username>/m3trics.git (fetch)
-# origin    https://github.com/<your-username>/m3trics.git (push)
+# origin    https://github.com/<your-username>/<your-repo-name>.git (fetch)
+# origin    https://github.com/<your-username>/<your-repo-name>.git (push)
 # upstream  https://github.com/radiomicsgroup/m3trics.git (fetch)
 ```
 
